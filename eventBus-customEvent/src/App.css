@@ -1,0 +1,27 @@
+h2 {
+  text-align: center;
+}
+
+button {
+  padding: 4px 8px;
+  margin-right: 10px;
+}
+
+.parent-container {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+}
+
+.content-box {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+.content-box > div {
+  width: 400px;
+  padding: 16px;
+  background: #eee;
+  border: 1px solid #eee;
+}
