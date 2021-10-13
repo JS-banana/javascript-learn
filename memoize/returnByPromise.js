@@ -37,3 +37,26 @@ function memoProcessData(key) {
       })
   })
 }
+
+// 封装
+function memoPromise(asyncFn) {
+  const memo = {}
+  const progressQueues = {}
+
+  return new Promise((resolve, reject) => {
+    if (memo.hasOwnProperty(key)) {
+      resolve(memo[key])
+      return
+    }
+
+    if (!progressQueues.hasOwnProperty(key)) {
+      progressQueues[key] = [[resolve, reject]]
+    } else {
+      progressQueues[key].push([resolve, reject])
+      return
+    }
+
+    //
+    asyncFn()
+  })
+}

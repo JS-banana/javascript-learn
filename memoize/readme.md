@@ -4,7 +4,7 @@
 
 记忆函数，即拥有缓存能力的函数。
 
-我们比较熟悉的`React`，其类组件 `PureComponent` 和函数式组件 `memo` 都有类似的功能，在 `React`中的作用主要是减少重复 `render`，提升性能
+<!-- 我们比较熟悉的`React`，其类组件 `PureComponent` 和函数式组件 `memo` 都有类似的功能，在 `React`中的作用主要是减少重复 `render`，提升性能 -->
 
 对于普通计算函数，更多的是通过空间换时间，在大量复杂计算场景下有一定的优势（长递归或长迭代操作）
 
@@ -127,7 +127,7 @@ function memoize(fn, getKey) {
 // memo { '4_2': 2 }
 ```
 
-## 异步函数——事件回调的memoize
+## 异步函数：事件回调
 
 几点思考：
 
@@ -264,14 +264,147 @@ function memoizeAsync(fn, getKey) {
 
 主要是把变量对象放到了函数执行环境内部，以闭包的形式完成隔离，然后 `fn.apply`替换为 `fn.call`
 
-## 异步函数——promise的memoize
+## 异步函数：promise
 
 对于 promise函数，考虑整体以 promise包装处理，并返回 promise
 
+内部匿名函数调整为 `new Promise((resolve, reject) => {})`，以`resolve`、 `reject`返回执行状态结果值
+
+假设有一个异步函数 `fetchData(args)`，缓存能力实现示例
+
+```js
+const memo = {}
+const progressQueues = {}
+
+function memoizePromise(fn, getKey) {
+    return new Promise((resolve, reject) => {
+      // 存在缓存，以 resolve 返回结果值
+      if (memo.hasOwnProperty(key)) {
+        resolve(memo[key])
+        return
+      }
+
+      // 队列
+      // 考虑成功/异常，以 [resolve, reject] 为一组放入队列
+      if (!progressQueues.hasOwnProperty(key)) {
+        progressQueues[key] = [[resolve, reject]]
+      } else {
+        progressQueues[key].push([resolve, reject])
+        return
+      }
+
+      // 执行异步函数 fetchData
+      fetchData(key)
+        .then((data) => {
+          memo[key] = data // 缓存 data
+          // 成功队列通知
+          for (let [resolver] of progressQueues[key]) resolver(data)
+        })
+        .catch((error) => {
+          // 失败队列通知
+          for (let [, rejector] of progressQueues[key]) rejector(error)
+        })
+        .finally(() => {
+          // 清除队列
+          delete progressQueues[key]
+        })
+    })
+}
+```
+
+针对promise的缓存封装可以查看库 [p-memoize](https://github.com/sindresorhus/p-memoize)
+
 ## lodash.memoize、memoize-one等第三方库对记忆函数的实现分析
+
+### lodash.memoize
+
+源码如下，写法比较简洁灵巧，逻辑类似
+
+同样提供两个参数 `func`-原始函数本身，`resolver` 自定义key的执行函数
+
+```js
+/**
+ * @param {Function} func The function to have its output memoized.
+ * @param {Function} [resolver] The function to resolve the cache key.
+ * @returns {Function} Returns the new memoized function.
+ */
+
+function memoize(func, resolver) {
+  // 异常过滤
+  if (typeof func !== "function" || (resolver != null && typeof resolver !== "function")) {
+    throw new TypeError("Expected a function")
+  }
+
+  // 返回函数 memoized
+  const memoized = function (...args) {
+    // 获取到 key：resolver存在则取函数执行结果，否则取参数第一位
+    const key = resolver ? resolver.apply(this, args) : args[0]
+
+    // 缓存判断
+    // 该写法是直接把缓存对象挂载到函数对象属性cache上
+    const cache = memoized.cache
+    if (cache.has(key)) {
+      return cache.get(key)
+    }
+
+    // 执行函数得到 result
+    const result = func.apply(this, args)
+
+    // 保存到缓存对象 cache 上
+    memoized.cache = cache.set(key, result) || cache
+    return result
+  }
+
+  // 指定 cache实例,默认为 Map
+  memoized.cache = new (memoize.Cache || Map)()
+  return memoized
+}
+
+// 可指定 缓存对象实例
+// 例如:替换 memoize.Cache = WeakMap;
+memoize.Cache = Map
+
+export default memoize
+```
+
+### memoize-one
+
+代码逻辑相当简洁了
+
+```js
+import areInputsEqual from './are-inputs-equal';
+
+function memoizeOne(resultFn, isEqual = areInputsEqual) {
+  let lastThis;
+  let lastArgs = [];
+  let lastResult;
+  let calledOnce = false;
+
+  // breaking cache when context (this) or arguments change
+  function memoized(this, ...newArgs) {
+    if (calledOnce && lastThis === this && isEqual(newArgs, lastArgs)) {
+      return lastResult;
+    }
+
+    // Throwing during an assignment aborts the assignment: https://codepen.io/alexreardon/pen/RYKoaz
+    // Doing the lastResult assignment first so that if it throws
+    // nothing will be overwritten
+    lastResult = resultFn.apply(this, newArgs);
+    calledOnce = true;
+    lastThis = this;
+    lastArgs = newArgs;
+    return lastResult;
+  }
+
+  return memoized ;
+}
+```
 
 ## 参考
 
 - [Memoizing async functions in Javascript](https://stackfull.dev/memoizing-async-functions-in-javascript)
 - [JavaScript专题之函数记忆](https://github.com/mqyqingfeng/Blog/issues/46)
 - [JavaScript 记忆（Memoization）函数](https://juejin.cn/post/6844903826173100046)
+- [lodash.memoize](https://github.com/lodash/lodash/blob/master/memoize.js)
+- [p-memoize](https://github.com/sindresorhus/p-memoize/blob/main/index.ts)
+- [memoize-one](https://github.com/alexreardon/memoize-one)
