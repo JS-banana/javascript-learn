@@ -8,6 +8,7 @@
 
 ```js
 eventBus-customEvent        // JavaScript事件通信研究
+memoize                     // 记忆函数 memoize
 reduce-promise              // JavaScript数组方法reduce的妙用
 subob-subpub                // [设计模式] 发布订阅模式 vs 观察者模式
 ```
