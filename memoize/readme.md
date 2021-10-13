@@ -127,7 +127,7 @@ function memoize(fn, getKey) {
 // memo { '4_2': 2 }
 ```
 
-## 异步函数的memoize
+## 异步函数——事件回调的memoize
 
 几点思考：
 
@@ -144,7 +144,7 @@ function memoize(fn, getKey) {
 queues[key] = [callback1, callback2, callback3]
 ```
 
-假设一个异步函数 `expensiveOperation`会在执行后 `1000ms`后返回通知
+假设一个异步函数 `expensiveOperation`会在执行后 `1000ms`后返回通知，先看下事件回调callback形式的
 
 ```js
 // 异步回调函数
@@ -208,6 +208,65 @@ function memoExpensiveOperation(key, callback) {
   })
 }
 ```
+
+以上 `memo`用于缓存结果，`progressQueues`用于保存函数队列，并通过 `key`确保只有一个执行函数在运行，其余加入队列统一接收执行函数的结果
+
+- 示例如下，封装下 memoizeAsync函数
+
+```js
+expensiveOperation(key, (data) => {
+  // Do something
+})
+
+const memoExpensiveOperation = memoizeAsync(expensiveOperation, (key) => key)
+```
+
+```js
+function memoizeAsync(fn, getKey) {
+  const memo = {}
+  const progressQueues = {}
+
+  return function memoized(...allArgs) {
+    // 得到函数的 事件回调callback函数
+    const callback = allArgs[allArgs.length - 1]
+    // 拿到全部参数
+    const args = allArgs.slice(0, -1)
+    // 自定义 key
+    const key = getKey(...args)
+
+    if (memo.hasOwnProperty(key)) {
+      callback(key)
+      return
+    }
+
+    if (!progressQueues.hasOwnProperty(key)) {
+      progressQueues[key] = [callback]
+    } else {
+      progressQueues[key].push(callback)
+      return
+    }
+
+    // 注意：这里我们使用 call代替了 apply执行函数
+    // 因为需要在末尾传递一个回调函数（原本函数结构），所以不使用apply数组传递而是换成参数罗列call的形式
+    fn.call(this, ...args, (data) => {
+      // memoize result
+      memo[key] = data
+      // process all the enqueued items after it's done
+      for (let callback of progressQueues[key]) {
+        callback(data)
+      }
+      // clean up progressQueues
+      delete progressQueue[key]
+    })
+  }
+}
+```
+
+主要是把变量对象放到了函数执行环境内部，以闭包的形式完成隔离，然后 `fn.apply`替换为 `fn.call`
+
+## 异步函数——promise的memoize
+
+对于 promise函数，考虑整体以 promise包装处理，并返回 promise
 
 ## lodash.memoize、memoize-one等第三方库对记忆函数的实现分析
 
